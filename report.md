@@ -537,4 +537,6 @@ node submit.mjs
 
 ---
 
+**Published:** https://github.com/s97472091-pixel/verdikta-integration-guide
+
 *Written from experience: 80+ submissions, 23+ wins across bounties #35–#69 on Base mainnet. July 2026.*

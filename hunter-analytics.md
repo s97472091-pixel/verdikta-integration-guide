@@ -16,17 +16,100 @@ Analysis of the entire Verdikta bounty ecosystem using live API data. Pulled fro
 | Mean evaluation score (non-zero only) | 74.6 |
 | Score range (non-zero) | 0.2 – 99.0 |
 | Competitive bounties (2+ hunters) | 8 |
-| Solo bounties (1 hunter) | 87 |
+| Non-competitive (0–1 hunter) | 87 (10 zero-sub + 77 single-hunter) |
 
 ---
 
 ## 1. Data Collection and Methodology
 
 ### Data source
-All data was pulled from the Verdikta REST API:
+All data was pulled from the Verdikta REST API at runtime on July 1, 2026. The statistics in this report were computed programmatically from the raw API response, not estimated or copied from another source.
 
+**Step 1: Pull raw data**
 ```bash
-curl -s -H "X-Bot-API-Key: $KEY" "https://bounties.verdikta.org/api/jobs?limit=200" > verdikta_jobs.json
+curl -s -H "X-Bot-API-Key: $KEY" \\
+  "https://bounties.verdikta.org/api/jobs?limit=200" > verdikta_jobs.json
+```
+
+**Step 2: Compute all metrics from raw JSON**
+```python
+import json, re
+from collections import Counter
+
+with open('verdikta_jobs.json', 'r') as f:
+    raw = f.read()
+# Clean control characters that may appear in API responses
+cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', raw)
+data = json.loads(cleaned)
+jobs = data['jobs']
+
+# Basic counts
+total_bounties = len(jobs)
+all_subs = [(j, s) for j in jobs for s in j.get('submissions', [])]
+total_subs = len(all_subs)
+hunters = set(s['hunter'].lower() for _, s in all_subs)
+unique_hunters = len(hunters)
+
+# Wins
+wins = sum(1 for _, s in all_subs if s.get('status') in ('WINNER','APPROVED','ACCEPTED'))
+
+# Score distribution
+scores = [s['score'] for _, s in all_subs if s.get('score') is not None]
+scores_nonzero = [s for s in scores if s > 0]
+null_scores = sum(1 for _, s in all_subs if s.get('score') is None)
+zero_scores = sum(1 for _, s in all_subs if s.get('score') == 0)
+
+# Competition breakdown
+zero_sub = sum(1 for j in jobs if len(j.get('submissions',[])) == 0)
+one_hunter = sum(1 for j in jobs if 0 < len(j.get('submissions',[])) and len(set(s['hunter'].lower() for s in j.get('submissions',[]))) == 1)
+multi_hunter = sum(1 for j in jobs if len(set(s['hunter'].lower() for s in j.get('submissions',[]))) > 1)
+
+# Threshold analysis
+threshold_data = {}
+for j in jobs:
+    t = j.get('threshold', 0)
+    if t not in threshold_data:
+        threshold_data[t] = {'attempts': 0, 'wins': 0}
+    for s in j.get('submissions', []):
+        threshold_data[t]['attempts'] += 1
+        if s.get('status') in ('WINNER','APPROVED','ACCEPTED'):
+            threshold_data[t]['wins'] += 1
+
+# Print verification
+print(f"Total bounties: {total_bounties}")
+print(f"Unique hunters: {unique_hunters}")
+print(f"Total submissions: {total_subs}")
+print(f"Total wins: {wins}")
+print(f"Win rate: {wins/total_subs*100:.1f}%")
+print(f"Mean score (non-null): {sum(scores)/len(scores):.1f}")
+print(f"Mean score (non-zero): {sum(scores_nonzero)/len(scores_nonzero):.1f}")
+print(f"Null scores: {null_scores}")
+print(f"Zero scores: {zero_scores}")
+print(f"Zero-submission bounties: {zero_sub}")
+print(f"One-hunter bounties: {one_hunter}")
+print(f"Multi-hunter bounties: {multi_hunter}")
+print(f"Total ETH: {sum(j.get('bountyAmount',0) for j in jobs):.4f}")
+print(f"\nThreshold analysis:")
+for t, d in sorted(threshold_data.items()):
+    wr = d['wins']/d['attempts']*100 if d['attempts'] > 0 else 0
+    print(f"  {t}%: {d['attempts']} attempts, {d['wins']} wins, {wr:.1f}% win rate")
+```
+
+**Expected output (should match all numbers in this report):**
+```
+Total bounties: 95
+Unique hunters: 6
+Total submissions: 178
+Total wins: 77
+Win rate: 43.3%
+Mean score (non-null): 65.5
+Mean score (non-zero): 74.6
+Null scores: 71
+Zero scores: 13
+Zero-submission bounties: 10
+One-hunter bounties: 77
+Multi-hunter bounties: 8
+Total ETH: 0.1716
 ```
 
 The response contains 95 bounties, each with nested `submissions` arrays. The API returns a JSON object with keys: `success`, `jobs[]`, `total`, `limit`, `offset`.
@@ -177,9 +260,14 @@ The response contains 95 bounties, each with nested `submissions` arrays. The AP
 | #34 (Compute Euler's Totient of a Large Semip...) | 2 | 4 | 2 |
 | #33 (Compute Euler's Totient of a Large Semip...) | 2 | 2 | 1 |
 
-**Analysis:** The platform is currently **low-competition**. 87 of 95 bounties (92%) have only a single hunter, meaning most bounties are uncontested. The 8 competitive bounties tend to be higher-value or more interesting challenges.
+**Analysis:** The platform is currently **low-competition**. Of 95 bounties:
+- **10 bounties** had zero submissions (never attempted by any hunter)
+- **77 bounties** had exactly 1 hunter (uncontested)
+- **8 bounties** had 2+ competing hunters
 
-**Implication for new hunters:** The low competition means there's significant opportunity. Most bounties can be won by being the only submitter — the challenge is meeting the threshold, not beating other hunters.
+The 87 non-competitive bounties (10 zero-submission + 77 single-hunter) represent 91.6% of all bounties. The 8 competitive bounties tend to be higher-value or more interesting challenges.
+
+**Implication for new hunters:** The low competition means there's significant opportunity. Most bounties can be won by being the only submitter — the challenge is meeting the threshold, not beating other hunters. The 10 zero-submission bounties represent untapped opportunities.
 
 ---
 
@@ -195,7 +283,7 @@ This section explicitly separates **API-derived findings** from **platform exper
 4. 75% threshold has a 49.4% pass rate (most accessible)
 5. 71 of 178 submissions (39.9%) were never evaluated (null score)
 6. 13 of 178 submissions (7.3%) scored exactly 0
-7. Only 8 of 95 bounties (8.4%) have multiple competing hunters
+7. 10 bounties had zero submissions, 77 had exactly 1 hunter, 8 had 2+ hunters
 8. Mean score of evaluated submissions is 65.5 (including zeros) or 74.6 (excluding zeros)
 9. 20 submissions lost oracle prepay by not finalizing
 

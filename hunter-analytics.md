@@ -243,8 +243,10 @@ The response contains 95 bounties, each with nested `submissions` arrays. The AP
 
 ### Competition level
 
-- **8 bounties** had 2+ competing hunters (8.4% of all bounties)
-- **87 bounties** had only 1 hunter (91.6%)
+- **77 bounties** had exactly 1 hunter (81.1% of all bounties)
+- **10 bounties** had zero submissions (10.5%)
+- **8 bounties** had 2+ competing hunters (8.4%)
+- **87 bounties** were non-competitive (zero or one hunter)
 - Average submissions per bounty: 1.9
 
 ### Multi-hunter bounties
@@ -303,7 +305,7 @@ This section explicitly separates **API-derived findings** from **platform exper
 
 1. **Target 75% threshold bounties** — highest volume (85 attempts) and reasonable win rate (49%)
 2. **Avoid 90% threshold bounties** unless you have a proven track record — only 12% pass rate
-3. **Most bounties are uncontested** — 87 of 95 have a single hunter, so the bar is meeting the threshold, not beating competitors
+3. **Most attempted bounties are uncontested** — 77 bounties had exactly one hunter, and 10 had no submissions at all. This means competition is low; the main challenge is meeting the score threshold, not beating other hunters.
 4. **Always finalize submissions** — 20 submissions lost ~0.003 ETH each by not reclaiming oracle prepay
 5. **Learn from failures** — the mean score of zero-valued submissions is 0, while non-zero mean is 74.6. Understanding why submissions score 0 (must-pass failure, oracle error) is critical.
 
